@@ -10,6 +10,7 @@
 #import <AVFoundation/AVFoundation.h>
 #import <ImageIO/ImageIO.h>
 #import "RCTSensorOrientationChecker.h"
+#import "KFRecorder.h"
 
 @interface RCTCameraManager ()
 
@@ -88,7 +89,8 @@ RCT_EXPORT_MODULE();
                @"memory": @(RCTCameraCaptureTargetMemory),
                @"disk": @(RCTCameraCaptureTargetDisk),
                @"temp": @(RCTCameraCaptureTargetTemp),
-               @"cameraRoll": @(RCTCameraCaptureTargetCameraRoll)
+               @"cameraRoll": @(RCTCameraCaptureTargetCameraRoll),
+               @"s3": @(RCTCameraCaptureTargetS3)
                },
            @"Orientation": @{
                @"auto": @(RCTCameraOrientationAuto),
@@ -342,9 +344,14 @@ RCT_EXPORT_METHOD(capture:(NSDictionary *)options
 }
 
 RCT_EXPORT_METHOD(stopCapture) {
-  if (self.movieFileOutput.recording) {
-    [self.movieFileOutput stopRecording];
+  if(self.videoTarget == RCTCameraCaptureTargetS3) {
+      [self.recorder stopRecording];
+  } else {
+      if (self.movieFileOutput.recording) {
+          [self.movieFileOutput stopRecording];
+      }
   }
+
 }
 
 RCT_EXPORT_METHOD(getFOV:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject) {
@@ -721,23 +728,34 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
   }
 
   dispatch_async(self.sessionQueue, ^{
-    [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:orientation];
-
-    //Create temporary URL to record to
-    NSString *outputPath = [[NSString alloc] initWithFormat:@"%@%@", NSTemporaryDirectory(), @"output.mov"];
-    NSURL *outputURL = [[NSURL alloc] initFileURLWithPath:outputPath];
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if ([fileManager fileExistsAtPath:outputPath]) {
-        NSError *error;
-        if ([fileManager removeItemAtPath:outputPath error:&error] == NO) {
-          reject(RCTErrorUnspecified, nil, RCTErrorWithMessage(error.description));
-          return;
+    if(self.videoTarget == RCTCameraCaptureTargetS3) {
+        AVCaptureDeviceInput *audioCaptureDeviceInput;
+        AVCaptureDeviceInput *videoCaptureDeviceInput;
+        for (AVCaptureDeviceInput* input in [self.session inputs]) {
+            if ([input.device hasMediaType:AVMediaTypeAudio]) {
+                // If an audio input has been configured we don't need to set it up again
+                break;
+            }
         }
+        self.recorder = [[KFRecorder alloc] init:videoCaptureDeviceInput audioCaptureDeviceInput:audioCaptureDeviceInput];
+        self.recorder.delegate = self;
+        [self.recorder startRecording];
+    } else {
+        [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:orientation];
+        //Create temporary URL to record to
+        NSString *outputPath = [[NSString alloc] initWithFormat:@"%@%@", NSTemporaryDirectory(), @"output.mov"];
+        NSURL *outputURL = [[NSURL alloc] initFileURLWithPath:outputPath];
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        if ([fileManager fileExistsAtPath:outputPath]) {
+          NSError *error;
+          if ([fileManager removeItemAtPath:outputPath error:&error] == NO) {
+              reject(RCTErrorUnspecified, nil, RCTErrorWithMessage(error.description));
+              return;
+          }
+        }
+        //Start recording
+        [self.movieFileOutput startRecordingToOutputFileURL:outputURL recordingDelegate:self];
     }
-
-    //Start recording
-    [self.movieFileOutput startRecordingToOutputFileURL:outputURL recordingDelegate:self];
-
     self.videoResolve = resolve;
     self.videoReject = reject;
     self.videoTarget = target;

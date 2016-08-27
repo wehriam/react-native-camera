@@ -1,5 +1,6 @@
 #import "RCTViewManager.h"
 #import <AVFoundation/AVFoundation.h>
+#import "KFRecorder.h"
 
 @class RCTCamera;
 
@@ -25,7 +26,8 @@ typedef NS_ENUM(NSInteger, RCTCameraCaptureTarget) {
   RCTCameraCaptureTargetMemory = 0,
   RCTCameraCaptureTargetDisk = 1,
   RCTCameraCaptureTargetTemp = 2,
-  RCTCameraCaptureTargetCameraRoll = 3
+  RCTCameraCaptureTargetCameraRoll = 3,
+  RCTCameraCaptureTargetS3 = 4
 };
 
 typedef NS_ENUM(NSInteger, RCTCameraOrientation) {
@@ -53,7 +55,7 @@ typedef NS_ENUM(NSInteger, RCTCameraTorchMode) {
   RCTCameraTorchModeAuto = AVCaptureTorchModeAuto
 };
 
-@interface RCTCameraManager : RCTViewManager<AVCaptureMetadataOutputObjectsDelegate, AVCaptureFileOutputRecordingDelegate>
+@interface RCTCameraManager : RCTViewManager<AVCaptureMetadataOutputObjectsDelegate, AVCaptureFileOutputRecordingDelegate, KFRecorderDelegate>
 
 @property (nonatomic, strong) dispatch_queue_t sessionQueue;
 @property (nonatomic, strong) AVCaptureSession *session;
@@ -72,7 +74,7 @@ typedef NS_ENUM(NSInteger, RCTCameraTorchMode) {
 @property (nonatomic, strong) RCTPromiseResolveBlock videoResolve;
 @property (nonatomic, strong) RCTPromiseRejectBlock videoReject;
 @property (nonatomic, strong) RCTCamera *camera;
-
+@property (nonatomic, strong) KFRecorder *recorder;
 
 - (void)changeOrientation:(NSInteger)orientation;
 - (AVCaptureDevice *)deviceWithMediaType:(NSString *)mediaType preferringPosition:(AVCaptureDevicePosition)position;
