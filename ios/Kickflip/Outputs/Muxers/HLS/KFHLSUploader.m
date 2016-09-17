@@ -10,7 +10,6 @@
 #import "KFS3Stream.h"
 #import "KFUser.h"
 #import "KFLog.h"
-#import "KFAPIClient.h"
 #import "KFAWSCredentialsProvider.h"
 #import <AWSS3/AWSS3.h>
 
@@ -127,8 +126,7 @@ static NSString * const kKFS3Key = @"kKFS3Key";
     uploadRequest.bucket = self.stream.bucketName;
     uploadRequest.key = key;
     uploadRequest.body = [NSURL fileURLWithPath:filePath];
-    uploadRequest.ACL = AWSS3ObjectCannedACLPublicRead;
-    
+    uploadRequest.contentType  = @"application/x-mpegURL";
     [[self.transferManager upload:uploadRequest] continueWithBlock:^id(AWSTask *task) {
         if (task.error) {
             [self s3RequestFailedForFileName:fileName withError:task.error];
@@ -153,7 +151,6 @@ static NSString * const kKFS3Key = @"kKFS3Key";
     uploadRequest.bucket = self.stream.bucketName;
     uploadRequest.key = key;
     uploadRequest.body = data;
-    uploadRequest.ACL = AWSS3ObjectCannedACLPublicRead;
     uploadRequest.cacheControl = @"max-age=0";
     uploadRequest.contentLength = @(data.length);
     
@@ -221,7 +218,6 @@ static NSString * const kKFS3Key = @"kKFS3Key";
         uploadRequest.bucket = self.stream.bucketName;
         uploadRequest.key = key;
         uploadRequest.body = [NSURL fileURLWithPath:filePath];
-        uploadRequest.ACL = AWSS3ObjectCannedACLPublicRead;
         
         [[self.transferManager upload:uploadRequest] continueWithBlock:^id(AWSTask *task) {
             if (task.error) {
@@ -349,13 +345,6 @@ static NSString * const kKFS3Key = @"kKFS3Key";
                 DDLogError(@"Error removing thumbnail: %@", error.description);
             }
             self.stream.thumbnailURL = [self urlWithFileName:fileName];
-            [[KFAPIClient sharedClient] updateMetadataForStream:self.stream callbackBlock:^(KFStream *updatedStream, NSError *error) {
-                if (error) {
-                    DDLogError(@"Error updating stream thumbnail: %@", error);
-                } else {
-                    DDLogInfo(@"Updated stream thumbnail: %@", updatedStream.thumbnailURL);
-                }
-            }];
         }
     });
 }

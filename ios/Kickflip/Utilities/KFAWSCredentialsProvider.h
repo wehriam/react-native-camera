@@ -10,7 +10,7 @@
 #import <AWSCore/AWSCore.h>
 #import "KFS3Stream.h"
 
-@class BFTask;
+@class AWSTask;
 
 @interface KFAWSCredentialsProvider : NSObject <AWSCredentialsProvider>
 
@@ -34,6 +34,10 @@
  */
 @property (nonatomic, strong, readonly) NSDate *expiration;
 
+
+@property (nonatomic, strong) AWSCredentials *internalCredentials;
+
+
 /**
  *  Refresh the token associated with this provider.
  *
@@ -41,9 +45,10 @@
  *
  *  @return BFTask.
  */
-- (BFTask *)refresh;
+- (AWSTask *)refresh;
 
 - (instancetype)initWithStream:(KFS3Stream*)stream;
+
 
 /** Utility to convert from "us-west-1" to enum AWSRegionUSWest1 */
 + (AWSRegionType) regionTypeForRegion:(NSString*)region;

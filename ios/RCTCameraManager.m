@@ -200,7 +200,7 @@ RCT_CUSTOM_VIEW_PROPERTY(type, NSInteger, RCTCamera) {
       {
         [self.session addInput:self.videoCaptureDeviceInput];
       }
-
+      
       [self.session commitConfiguration];
     });
   }
@@ -265,9 +265,13 @@ RCT_CUSTOM_VIEW_PROPERTY(barCodeTypes, NSArray, RCTCamera) {
 RCT_CUSTOM_VIEW_PROPERTY(captureAudio, BOOL, RCTCamera) {
   BOOL captureAudio = [RCTConvert BOOL:json];
   if (captureAudio) {
-    RCTLog(@"capturing audio");
     [self initializeCaptureSessionInput:AVMediaTypeAudio];
   }
+}
+
+RCT_CUSTOM_VIEW_PROPERTY(captureTarget, NSInteger, RCTCamera) {
+  NSInteger target = [RCTConvert NSInteger:json];
+  self.videoTarget = target;
 }
 
 - (NSArray *)customDirectEventTypes
@@ -345,6 +349,7 @@ RCT_EXPORT_METHOD(capture:(NSDictionary *)options
 
 RCT_EXPORT_METHOD(stopCapture) {
   if(self.videoTarget == RCTCameraCaptureTargetS3) {
+      RCTLog(@"STOP RECORDING");
       [self.recorder stopRecording];
   } else {
       if (self.movieFileOutput.recording) {
@@ -399,30 +404,35 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
     if (self.presetCamera == AVCaptureDevicePositionUnspecified) {
       self.presetCamera = AVCaptureDevicePositionBack;
     }
-
-    AVCaptureStillImageOutput *stillImageOutput = [[AVCaptureStillImageOutput alloc] init];
-    if ([self.session canAddOutput:stillImageOutput])
-    {
-      stillImageOutput.outputSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
-      [self.session addOutput:stillImageOutput];
-      self.stillImageOutput = stillImageOutput;
+    if(self.videoTarget == RCTCameraCaptureTargetS3) {
+      self.recorder = [[KFRecorder alloc] initWithSession:self.session];
+      self.recorder.delegate = self;
+    } else {
+      AVCaptureStillImageOutput *stillImageOutput = [[AVCaptureStillImageOutput alloc] init];
+      if ([self.session canAddOutput:stillImageOutput])
+      {
+        stillImageOutput.outputSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
+        [self.session addOutput:stillImageOutput];
+        self.stillImageOutput = stillImageOutput;
+      }
+      
+      
+      AVCaptureMovieFileOutput *movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
+      if ([self.session canAddOutput:movieFileOutput])
+      {
+        [self.session addOutput:movieFileOutput];
+        self.movieFileOutput = movieFileOutput;
+      }
+      
+      AVCaptureMetadataOutput *metadataOutput = [[AVCaptureMetadataOutput alloc] init];
+      if ([self.session canAddOutput:metadataOutput]) {
+        [metadataOutput setMetadataObjectsDelegate:self queue:self.sessionQueue];
+        [self.session addOutput:metadataOutput];
+        [metadataOutput setMetadataObjectTypes:self.barCodeTypes];
+        self.metadataOutput = metadataOutput;
+      }
     }
-
-    AVCaptureMovieFileOutput *movieFileOutput = [[AVCaptureMovieFileOutput alloc] init];
-    if ([self.session canAddOutput:movieFileOutput])
-    {
-      [self.session addOutput:movieFileOutput];
-      self.movieFileOutput = movieFileOutput;
-    }
-
-    AVCaptureMetadataOutput *metadataOutput = [[AVCaptureMetadataOutput alloc] init];
-    if ([self.session canAddOutput:metadataOutput]) {
-      [metadataOutput setMetadataObjectsDelegate:self queue:self.sessionQueue];
-      [self.session addOutput:metadataOutput];
-      [metadataOutput setMetadataObjectTypes:self.barCodeTypes];
-      self.metadataOutput = metadataOutput;
-    }
-
+    
     __weak RCTCameraManager *weakSelf = self;
     [self setRuntimeErrorHandlingObserver:[NSNotificationCenter.defaultCenter addObserverForName:AVCaptureSessionRuntimeErrorNotification object:self.session queue:nil usingBlock:^(NSNotification *note) {
       RCTCameraManager *strongSelf = weakSelf;
@@ -728,18 +738,11 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
   }
 
   dispatch_async(self.sessionQueue, ^{
-    if(self.videoTarget == RCTCameraCaptureTargetS3) {
-        AVCaptureDeviceInput *audioCaptureDeviceInput;
-        AVCaptureDeviceInput *videoCaptureDeviceInput;
-        for (AVCaptureDeviceInput* input in [self.session inputs]) {
-            if ([input.device hasMediaType:AVMediaTypeAudio]) {
-                // If an audio input has been configured we don't need to set it up again
-                break;
-            }
-        }
-        self.recorder = [[KFRecorder alloc] init:videoCaptureDeviceInput audioCaptureDeviceInput:audioCaptureDeviceInput];
-        self.recorder.delegate = self;
-        [self.recorder startRecording];
+    if(target == RCTCameraCaptureTargetS3) {
+        NSString *sessionId = [[NSUUID UUID] UUIDString];
+        NSMutableDictionary *awsDictionary = [[NSMutableDictionary alloc] initWithDictionary:[options valueForKey:@"awsSettings"] copyItems:NO];
+        [awsDictionary setObject:sessionId forKey:@"stream_id"];
+        [self.recorder startRecording:orientation awsDictionary:awsDictionary];
     } else {
         [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:orientation];
         //Create temporary URL to record to
@@ -758,7 +761,6 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
     }
     self.videoResolve = resolve;
     self.videoReject = reject;
-    self.videoTarget = target;
   });
 }
 

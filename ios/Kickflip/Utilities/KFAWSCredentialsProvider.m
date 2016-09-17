@@ -7,9 +7,12 @@
 //
 
 #import "KFAWSCredentialsProvider.h"
-#import <Bolts/BFTask.h>
+#import <AWSCore/AWSTask.h>
 
 @implementation KFAWSCredentialsProvider
+
+@synthesize internalCredentials = _internalCredentials;
+
 
 - (instancetype)initWithStream:(KFS3Stream*)stream {
     if (self = [super init]) {
@@ -17,8 +20,21 @@
         _secretKey = stream.awsSecretKey;
         _sessionKey = stream.awsSessionToken;
         _expiration = stream.awsExpirationDate;
+        _internalCredentials = [[AWSCredentials alloc] initWithAccessKey:stream.awsAccessKey
+                                                             secretKey:stream.awsSecretKey
+                                                            sessionKey:stream.awsSessionToken
+                                                            expiration:stream.awsExpirationDate];
     }
+    NSLog(@"Access Key: %@", stream.awsAccessKey);
     return self;
+}
+
+- (AWSTask<AWSCredentials *> *)credentials {
+  return [AWSTask taskWithResult:self.internalCredentials];
+}
+
+- (void)invalidateCachedTemporaryCredentials {
+  // No-op
 }
 
 /**
@@ -28,9 +44,9 @@
  *
  *  @return BFTask.
  */
-- (BFTask *)refresh {
-    return [BFTask taskWithError:[NSError errorWithDomain:@"io.kickflip.sdk" code:100 userInfo:@{NSLocalizedDescriptionKey: @"Refresh not supported"}]];
-}
+//- (AWSTask *)refresh {
+//    return [AWSTask taskWithError:[NSError errorWithDomain:@"io.kickflip.sdk" code:100 userInfo:@{NSLocalizedDescriptionKey: @"Refresh not supported"}]];
+//}
 
 /** Utility to convert from "us-west-1" to enum AWSRegionUSWest1 */
 + (AWSRegionType) regionTypeForRegion:(NSString*)region {

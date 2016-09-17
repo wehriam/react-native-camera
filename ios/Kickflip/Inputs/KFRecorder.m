@@ -16,8 +16,8 @@
 #import "KFS3Stream.h"
 #import "KFFrame.h"
 #import "KFVideoFrame.h"
-#import "Kickflip.h"
 #import "Endian.h"
+#import <UIKit/UIKit.h>
 
 @interface KFRecorder()
 @property (nonatomic) double minBitrate;
@@ -27,12 +27,16 @@
 
 @implementation KFRecorder
 
-- (id) init:(AVCaptureDeviceInput*)videoCaptureDeviceInput audioCaptureDeviceInput:(AVCaptureDeviceInput *)audioCaptureDeviceInput {
-    if (self = [super init]) {
-        self.videoCaptureDeviceInput = videoCaptureDeviceInput;
-        self.audioCaptureDeviceInput = audioCaptureDeviceInput;
-        _minBitrate = 300 * 1000;
-        [self setupSession];
+- (id) initWithSession:(AVCaptureSession *)session{
+    self = [super init];
+    if (self) {
+        _session = session;
+        self.maxBitrate = 4096 * 1024; // 2 Mbps
+        self.useAdaptiveBitrate = YES;
+        NSLog(@"INITIALIZING");
+        _minBitrate = 300 * 1024;
+        [self setupVideoCapture];
+        [self setupAudioCapture];
         [self setupEncoders];
     }
     return self;
@@ -63,10 +67,10 @@
 
 - (void) setupEncoders {
     self.audioSampleRate = 44100;
-    self.videoHeight = 720;
-    self.videoWidth = 1280;
-    int audioBitrate = 64 * 1000; // 64 Kbps
-    int maxBitrate = [Kickflip maxBitrate];
+    self.videoHeight = 1920;
+    self.videoWidth = 1080;
+    int audioBitrate = 128 * 1024; // 128 Kbps
+    int maxBitrate = self.maxBitrate;
     int videoBitrate = maxBitrate - audioBitrate;
     _h264Encoder = [[KFH264Encoder alloc] initWithBitrate:videoBitrate width:self.videoWidth height:self.videoHeight];
     _h264Encoder.delegate = self;
@@ -77,62 +81,30 @@
 }
 
 - (void) setupAudioCapture {
-
-    // create capture device with video input
-    
-    /*
-     * Create audio connection
-     */
-    
-    /*
-    AVCaptureDevice *audioDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
-    NSError *error = nil;
-    AVCaptureDeviceInput *audioInput = [[AVCaptureDeviceInput alloc] initWithDevice:audioDevice error:&error];
-    
-    if (error) {
-        NSLog(@"Error getting audio input device: %@", error.description);
-    }
-    */
-    
-    AVCaptureDeviceInput *audioInput = self.audioCaptureDeviceInput;
-    if ([_session canAddInput:audioInput]) {
-        [_session addInput:audioInput];
-    }
-    
-    _audioQueue = dispatch_queue_create("Audio Capture Queue", DISPATCH_QUEUE_SERIAL);
-    _audioOutput = [[AVCaptureAudioDataOutput alloc] init];
-    [_audioOutput setSampleBufferDelegate:self queue:_audioQueue];
-    if ([_session canAddOutput:_audioOutput]) {
-        [_session addOutput:_audioOutput];
-    }
-    _audioConnection = [_audioOutput connectionWithMediaType:AVMediaTypeAudio];
+  
+  /*
+   * Create audio connection
+   */
+  _audioQueue = dispatch_queue_create("Audio Capture Queue", DISPATCH_QUEUE_SERIAL);
+  _audioOutput = [[AVCaptureAudioDataOutput alloc] init];
+  [_audioOutput setSampleBufferDelegate:self queue:_audioQueue];
+  if ([_session canAddOutput:_audioOutput]) {
+    [_session addOutput:_audioOutput];
+  }
+  
 }
 
 - (void) setupVideoCapture {
-    /*
-    NSError *error = nil;
-    AVCaptureDevice* videoDevice = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    AVCaptureDeviceInput* videoInput = [AVCaptureDeviceInput deviceInputWithDevice:videoDevice error:&error];
-    if (error) {
-        NSLog(@"Error getting video input device: %@", error.description);
-    }
-    if ([_session canAddInput:videoInput]) {
-        [_session addInput:videoInput];
-    }
-    */
-    
-    AVCaptureDeviceInput *videoInput = self.videoCaptureDeviceInput;
-    // create an output for YUV output with self as delegate
-    _videoQueue = dispatch_queue_create("Video Capture Queue", DISPATCH_QUEUE_SERIAL);
-    _videoOutput = [[AVCaptureVideoDataOutput alloc] init];
-    [_videoOutput setSampleBufferDelegate:self queue:_videoQueue];
-    NSDictionary *captureSettings = @{(NSString*)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)};
-    _videoOutput.videoSettings = captureSettings;
-    _videoOutput.alwaysDiscardsLateVideoFrames = YES;
-    if ([_session canAddOutput:_videoOutput]) {
-        [_session addOutput:_videoOutput];
-    }
-    _videoConnection = [_videoOutput connectionWithMediaType:AVMediaTypeVideo];
+  // create an output for YUV output with self as delegate
+  _videoQueue = dispatch_queue_create("Video Capture Queue", DISPATCH_QUEUE_SERIAL);
+  _videoOutput = [[AVCaptureVideoDataOutput alloc] init];
+  [_videoOutput setSampleBufferDelegate:self queue:_videoQueue];
+  NSDictionary *captureSettings = @{(NSString*)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)};
+  _videoOutput.videoSettings = captureSettings;
+  _videoOutput.alwaysDiscardsLateVideoFrames = YES;
+  if ([_session canAddOutput:_videoOutput]) {
+    [_session addOutput:_videoOutput];
+  }
 }
 
 #pragma mark KFEncoderDelegate method
@@ -207,55 +179,34 @@
     return (image);
 }
 
-- (void) setupSession {
-    _session = [[AVCaptureSession alloc] init];
-    [self setupVideoCapture];
-    [self setupAudioCapture];
 
-    // start capture and a preview layer
-    [_session startRunning];
-
-    _previewLayer = [AVCaptureVideoPreviewLayer layerWithSession:_session];
-    _previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
-}
-
-- (void) startRecording {
-    NSDictionary *responseDictionary = @{
-                                       @"bucketName": @"",
-                                       @"awsAccessKey": @"",
-                                       @"awsSecretKey": @"",
-                                       @"awsSessionToken": @"",
-                                       @"awsExpirationDate": @"",
-                                       @"awsPrefix": @"",
-                                       @"awsRegion":  @""
-                                     };
-    KFStream * ndpointResponse = [MTLJSONAdapter modelOfClass:[KFS3Stream class] fromJSONDictionary:responseDictionary error:&error];
-    self.stream = endpointResponse;
-    if ([endpointResponse isKindOfClass:[KFS3Stream class]]) {
-        KFS3Stream *s3Endpoint = (KFS3Stream*)endpointResponse;
-        s3Endpoint.streamState = KFStreamStateStreaming;
-        [self setupHLSWriterWithEndpoint:s3Endpoint];
-        
-        [[KFHLSMonitor sharedMonitor] startMonitoringFolderPath:_hlsWriter.directoryPath endpoint:s3Endpoint delegate:self];
-        
-        NSError *error = nil;
-        [_hlsWriter prepareForWriting:&error];
-        if (error) {
-            DDLogError(@"Error preparing for writing: %@", error);
-        }
-        self.isRecording = YES;
-        if (self.delegate && [self.delegate respondsToSelector:@selector(recorderDidStartRecording:error:)]) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self.delegate recorderDidStartRecording:self error:nil];
-            });
-        }
+- (void) startRecording:(AVCaptureVideoOrientation)orientation awsDictionary:(NSDictionary *)awsDictionary  {
+    NSLog(@"AWS: %@", awsDictionary);
+    _videoConnection = [_videoOutput connectionWithMediaType:AVMediaTypeVideo];
+    [_videoConnection setVideoOrientation:orientation];
+    _audioConnection = [_audioOutput connectionWithMediaType:AVMediaTypeAudio];
+    NSError *error;
+    KFS3Stream *s3Endpoint = [MTLJSONAdapter modelOfClass:[KFS3Stream class] fromJSONDictionary:awsDictionary error:&error];
+    self.stream = s3Endpoint;
+    s3Endpoint.streamState = KFStreamStateStreaming;
+    [self setupHLSWriterWithEndpoint:s3Endpoint];
+    [[KFHLSMonitor sharedMonitor] startMonitoringFolderPath:_hlsWriter.directoryPath endpoint:s3Endpoint delegate:self];
+    [_hlsWriter prepareForWriting:&error];
+    if (error) {
+        DDLogError(@"Error preparing for writing: %@", error);
+    }
+    self.isRecording = YES;
+    if (self.delegate && [self.delegate respondsToSelector:@selector(recorderDidStartRecording:error:)]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.delegate recorderDidStartRecording:self error:nil];
+        });
     }
 }
 
 
 - (void) stopRecording {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [_session stopRunning];
+        //[_session stopRunning];
         self.isRecording = NO;
         NSError *error = nil;
         [_hlsWriter finishWriting:&error];
@@ -275,11 +226,11 @@
 
 - (void) uploader:(KFHLSUploader *)uploader didUploadSegmentAtURL:(NSURL *)segmentURL uploadSpeed:(double)uploadSpeed numberOfQueuedSegments:(NSUInteger)numberOfQueuedSegments {
     DDLogInfo(@"Uploaded segment %@ @ %f KB/s, numberOfQueuedSegments %d", segmentURL, uploadSpeed, numberOfQueuedSegments);
-    if ([Kickflip useAdaptiveBitrate]) {
+    if (self.useAdaptiveBitrate) {
         double currentUploadBitrate = uploadSpeed * 8 * 1024; // bps
-        double maxBitrate = [Kickflip maxBitrate];
+        double maxBitrate = self.maxBitrate;
 
-        double newBitrate = currentUploadBitrate * 0.5;
+        double newBitrate = currentUploadBitrate * 0.75;
         if (newBitrate > maxBitrate) {
             newBitrate = maxBitrate;
         }

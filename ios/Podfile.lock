@@ -1,0 +1,78 @@
+PODS:
+  - AFNetworking (2.6.3):
+    - AFNetworking/NSURLConnection (= 2.6.3)
+    - AFNetworking/NSURLSession (= 2.6.3)
+    - AFNetworking/Reachability (= 2.6.3)
+    - AFNetworking/Security (= 2.6.3)
+    - AFNetworking/Serialization (= 2.6.3)
+    - AFNetworking/UIKit (= 2.6.3)
+  - AFNetworking/NSURLConnection (2.6.3):
+    - AFNetworking/Reachability
+    - AFNetworking/Security
+    - AFNetworking/Serialization
+  - AFNetworking/NSURLSession (2.6.3):
+    - AFNetworking/Reachability
+    - AFNetworking/Security
+    - AFNetworking/Serialization
+  - AFNetworking/Reachability (2.6.3)
+  - AFNetworking/Security (2.6.3)
+  - AFNetworking/Serialization (2.6.3)
+  - AFNetworking/UIKit (2.6.3):
+    - AFNetworking/NSURLConnection
+    - AFNetworking/NSURLSession
+  - AFOAuth2Manager (2.2.0):
+    - AFNetworking/NSURLConnection (~> 2.2)
+  - AWSCore (2.4.7)
+  - AWSS3 (2.4.7):
+    - AWSCore (= 2.4.7)
+  - CocoaLumberjack (1.9.2):
+    - CocoaLumberjack/Extensions (= 1.9.2)
+  - CocoaLumberjack/Core (1.9.2)
+  - CocoaLumberjack/Extensions (1.9.2):
+    - CocoaLumberjack/Core
+  - FFmpeg (2.8.3):
+    - FFmpeg/precompiled (= 2.8.3)
+  - FFmpeg/precompiled (2.8.3)
+  - FFmpegWrapper (1.0):
+    - FFmpeg (~> 2.2)
+  - FormatterKit/Resources (1.8.1)
+  - FormatterKit/TimeIntervalFormatter (1.8.1):
+    - FormatterKit/Resources
+  - Mantle (1.5.8):
+    - Mantle/extobjc (= 1.5.8)
+  - Mantle/extobjc (1.5.8)
+  - PureLayout (2.0.6)
+  - SDWebImage (3.8.1):
+    - SDWebImage/Core (= 3.8.1)
+  - SDWebImage/Core (3.8.1)
+  - SSKeychain (1.4.1)
+
+DEPENDENCIES:
+  - AFNetworking (~> 2.2)
+  - AFOAuth2Manager (~> 2.0)
+  - AWSS3 (~> 2.4)
+  - CocoaLumberjack (~> 1.0)
+  - FFmpegWrapper (~> 1.0)
+  - FormatterKit/TimeIntervalFormatter (~> 1.4)
+  - Mantle (~> 1.4)
+  - PureLayout (~> 2.0)
+  - SDWebImage (~> 3.6)
+  - SSKeychain (~> 1.2)
+
+SPEC CHECKSUMS:
+  AFNetworking: cb8d14a848e831097108418f5d49217339d4eb60
+  AFOAuth2Manager: 952eb62e8fd8022971e64c6e8fe28b9e999224af
+  AWSCore: 9a729a3c0050a51ece3547d546c327acdac7838a
+  AWSS3: 0f3c8ed11e04cd78cf86ed396c06330ab142db7a
+  CocoaLumberjack: 628fca2e88ef06f7cf6817309aa405f325d9a6fa
+  FFmpeg: f1428c3b60b5f9e349fcd5d7878705cd7f9a26f6
+  FFmpegWrapper: 9a932581137d17203e842ce942e171158336ae16
+  FormatterKit: 11ad17b983200629246a5a466f6f1bfa2df823cb
+  Mantle: f03b2b606c3f0cabd80214ad8a2fed6b464a7359
+  PureLayout: f25f0bb904d5ccfe6e31da3cb869185259f02e0d
+  SDWebImage: 35f9627a3e44b4f292a8a8ce6a531fa488239b91
+  SSKeychain: 55cc80f66f5c73da827e3077f02e43528897db41
+
+PODFILE CHECKSUM: d692cb89f0cb93aea9bf85c6b3dfba4f4aa164a3
+
+COCOAPODS: 1.0.1

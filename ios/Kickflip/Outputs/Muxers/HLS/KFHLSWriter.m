@@ -12,7 +12,7 @@
 #import "libavformat/avformat.h"
 #import "libavcodec/avcodec.h"
 #import "libavutil/opt.h"
-#import "log.h"
+#import "libavutil/log.h"
 #import "KFLog.h"
 
 @interface KFHLSWriter()

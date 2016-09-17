@@ -27,7 +27,6 @@
 @interface KFRecorder : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureAudioDataOutputSampleBufferDelegate, KFEncoderDelegate, KFHLSUploaderDelegate, CLLocationManagerDelegate>
 
 @property (nonatomic, strong) AVCaptureSession* session;
-@property (nonatomic, strong) AVCaptureVideoPreviewLayer* previewLayer;
 @property (nonatomic, strong) AVCaptureVideoDataOutput* videoOutput;
 @property (nonatomic, strong) AVCaptureAudioDataOutput* audioOutput;
 @property (nonatomic, strong) dispatch_queue_t videoQueue;
@@ -35,6 +34,8 @@
 @property (nonatomic, strong) AVCaptureConnection* audioConnection;
 @property (nonatomic, strong) AVCaptureConnection* videoConnection;
 @property (nonatomic, strong) CLLocation *lastLocation;
+@property (nonatomic) NSUInteger maxBitrate;
+@property (nonatomic) BOOL useAdaptiveBitrate;
 
 @property (nonatomic, strong) KFAACEncoder *aacEncoder;
 @property (nonatomic, strong) KFH264Encoder *h264Encoder;
@@ -49,8 +50,8 @@
 
 @property (nonatomic, weak) id<KFRecorderDelegate> delegate;
 
-- (id)init:(AVCaptureDeviceInput *)videoCaptureDeviceInput audioCaptureDeviceInput:(AVCaptureDeviceInput *)audioCaptureDeviceInput;
-- (void) startRecording;
+- (id)initWithSession:(AVCaptureSession *)session;
+- (void) startRecording:(AVCaptureVideoOrientation)orientation awsDictionary:(NSDictionary *)awsDictionary;
 - (void) stopRecording;
 
 @end

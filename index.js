@@ -105,9 +105,17 @@ export default class Camera extends Component {
     type: PropTypes.oneOfType([
       PropTypes.string,
       PropTypes.number
-    ])
+    ]),
+    awsSettings: React.PropTypes.shape({
+      bucket_name: React.PropTypes.string,
+      aws_access_key: React.PropTypes.string,
+      aws_secret_key: React.PropTypes.string,
+      aws_session_token: React.PropTypes.string,
+      aws_duration: React.PropTypes.string,
+      aws_region: React.PropTypes.string,
+      aws_prefix: React.PropTypes.string
+    })
   };
-
   static defaultProps = {
     aspect: CameraManager.Aspect.fill,
     type: CameraManager.Type.back,
@@ -175,6 +183,7 @@ export default class Camera extends Component {
   capture(options) {
     const props = convertNativeProps(this.props);
     options = {
+      awsSettings: props.awsSettings,
       audio: props.captureAudio,
       barCodeTypes: props.barCodeTypes,
       mode: props.captureMode,

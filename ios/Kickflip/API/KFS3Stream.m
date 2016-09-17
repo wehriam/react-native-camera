@@ -7,7 +7,6 @@
 //
 
 #import "KFS3Stream.h"
-#import "KFUser.h"
 #import "KFDateUtils.h"
 
 NSString * const KFS3StreamType = @"HLS";
