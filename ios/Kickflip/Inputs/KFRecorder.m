@@ -31,7 +31,7 @@
     self = [super init];
     if (self) {
         _session = session;
-        self.maxBitrate = 4096 * 1024; // 2 Mbps
+        self.maxBitrate = 4096 * 1024; // 4 Mbps
         self.useAdaptiveBitrate = YES;
         NSLog(@"INITIALIZING");
         _minBitrate = 300 * 1024;
@@ -56,8 +56,9 @@
     
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *basePath = ([paths count] > 0) ? [paths objectAtIndex:0] : nil;
-    NSString *folderName = [NSString stringWithFormat:@"%@.hls", endpoint.streamID];
+    NSString *folderName = endpoint.streamID;
     NSString *hlsDirectoryPath = [basePath stringByAppendingPathComponent:folderName];
+    self.manifestPath = hlsDirectoryPath;
     [[NSFileManager defaultManager] createDirectoryAtPath:hlsDirectoryPath withIntermediateDirectories:YES attributes:nil error:nil];
     self.hlsWriter = [[KFHLSWriter alloc] initWithDirectoryPath:hlsDirectoryPath];
     [_hlsWriter addVideoStreamWithWidth:self.videoWidth height:self.videoHeight];
@@ -196,6 +197,7 @@
         DDLogError(@"Error preparing for writing: %@", error);
     }
     self.isRecording = YES;
+    self.startDate = [NSDate date];
     if (self.delegate && [self.delegate respondsToSelector:@selector(recorderDidStartRecording:error:)]) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.delegate recorderDidStartRecording:self error:nil];
@@ -208,6 +210,7 @@
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         //[_session stopRunning];
         self.isRecording = NO;
+        self.finishDate = [NSDate date];
         NSError *error = nil;
         [_hlsWriter finishWriting:&error];
         if (error) {

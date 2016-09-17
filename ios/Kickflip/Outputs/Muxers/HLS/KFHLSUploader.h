@@ -28,6 +28,7 @@
 @property (nonatomic) dispatch_queue_t scanningQueue;
 @property (nonatomic) dispatch_queue_t callbackQueue;
 @property (nonatomic, strong) KFS3Stream *stream;
+@property (nonatomic, strong) NSString *kVODManifestFileName;
 @property (nonatomic) BOOL useSSL;
 @property (nonatomic, strong) KFHLSManifestGenerator *manifestGenerator;
 

@@ -44,7 +44,7 @@ static KFHLSMonitor *_sharedMonitor = nil;
 }
 
 - (void) finishUploadingContentsAtFolderPath:(NSString*)path endpoint:(KFS3Stream*)endpoint {
-    dispatch_async(self.monitorQueue, ^{
+    //dispatch_async(self.monitorQueue, ^{
         KFHLSUploader *hlsUploader = [self.hlsUploaders objectForKey:path];
         if (!hlsUploader) {
             hlsUploader = [[KFHLSUploader alloc] initWithDirectoryPath:path stream:endpoint];
@@ -52,7 +52,7 @@ static KFHLSMonitor *_sharedMonitor = nil;
         }
         hlsUploader.delegate = self;
         [hlsUploader finishedRecording];
-    });
+    //});
 }
 
 - (void) uploader:(KFHLSUploader *)uploader didUploadSegmentAtURL:(NSURL *)segmentURL uploadSpeed:(double)uploadSpeed numberOfQueuedSegments:(NSUInteger)numberOfQueuedSegments {

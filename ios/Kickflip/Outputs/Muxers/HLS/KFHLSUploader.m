@@ -17,8 +17,6 @@ static NSString * const kManifestKey =  @"manifest";
 static NSString * const kFileNameKey = @"fileName";
 static NSString * const kFileStartDateKey = @"startDate";
 
-static NSString * const kVODManifestFileName = @"vod.m3u8";
-
 
 static NSString * const kUploadStateQueued = @"queued";
 static NSString * const kUploadStateFinished = @"finished";
@@ -60,6 +58,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         dispatch_async(dispatch_get_main_queue(), ^{
             self.directoryWatcher = [KFDirectoryWatcher watchFolderWithPath:_directoryPath delegate:self];
         });
+        _kVODManifestFileName = @"vod.m3u8";
         _files = [NSMutableDictionary dictionary];
         _scanningQueue = dispatch_queue_create("KFHLSUploader Scanning Queue", DISPATCH_QUEUE_SERIAL);
         _callbackQueue = dispatch_queue_create("KFHLSUploader Callback Queue", DISPATCH_QUEUE_SERIAL);
@@ -95,7 +94,9 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         [self.manifestGenerator appendFromLiveManifest:manifestSnapshot];
         [self.manifestGenerator finalizeManifest];
         NSString *manifestString = [self.manifestGenerator manifestString];
-        [self updateManifestWithString:manifestString manifestName:kVODManifestFileName];
+        NSString *vodManifestPath = [_directoryPath stringByAppendingPathComponent:_kVODManifestFileName];
+        [manifestString writeToFile:vodManifestPath atomically:NO encoding:NSUTF8StringEncoding error:nil];
+        [self updateManifestWithString:manifestString manifestName:_kVODManifestFileName];
     }
 }
 
@@ -327,7 +328,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 - (NSURL*) manifestURL {
     NSString *manifestName = nil;
     if (self.isFinishedRecording) {
-        manifestName = kVODManifestFileName;
+        manifestName = _kVODManifestFileName;
     } else {
         manifestName = [_manifestPath lastPathComponent];
     }
@@ -375,12 +376,15 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
             double bytesPerSecond = fileSize / timeToUpload;
             double KBps = bytesPerSecond / 1024;
             [_files setObject:kUploadStateFinished forKey:fileName];
-
+          
+            /*
             [[NSFileManager defaultManager] removeItemAtPath:filePath error:&error];
             if (error) {
                 DDLogError(@"Error removing uploaded segment: %@", error.description);
             }
             [_queuedSegments removeObjectForKey:@(_nextSegmentIndexToUpload)];
+             */
+          
             NSUInteger queuedSegmentsCount = _queuedSegments.count;
             [self updateManifestWithString:manifest manifestName:@"index.m3u8"];
             _nextSegmentIndexToUpload++;
@@ -399,13 +403,14 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
                     [self.delegate uploader:self thumbnailReadyAtURL:url];
                 });
             }
+            /*
             NSString *filePath = [_directoryPath stringByAppendingPathComponent:fileName];
-            
             NSError *error = nil;
             [[NSFileManager defaultManager] removeItemAtPath:filePath error:&error];
             if (error) {
                 DDLogError(@"Error removing thumbnail: %@", error.description);
             }
+            */
             self.stream.thumbnailURL = [self urlWithFileName:fileName];
         }
     });
@@ -487,7 +492,6 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
       if(transfer == nil) {
         return;
       }
-      NSLog(@"TRANSFER: %@", transfer);
       if (error) {
         [self s3RequestFailedForFileName: [transfer objectForKey:@"fileName"] withError:error];
       } else {;
