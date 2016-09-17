@@ -28,6 +28,12 @@ static NSString * const kUploadStateFailed = @"failed";
 static NSString * const kKFS3TransferManagerKey = @"kKFS3TransferManagerKey";
 static NSString * const kKFS3Key = @"kKFS3Key";
 
+AWSS3TransferUtility *transferUtility;
+NSMutableDictionary *transferDictionary;
+AWSS3TransferUtilityDownloadCompletionHandlerBlock downloadCompletionHandler;
+AWSS3TransferUtilityProgressBlock downloadProgressHandler;
+AWSS3TransferUtilityUploadCompletionHandlerBlock uploadCompletionHandler;
+AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 
 @interface KFHLSUploader()
 @property (nonatomic) NSUInteger numbersOffset;
@@ -48,6 +54,7 @@ static NSString * const kKFS3Key = @"kKFS3Key";
 
 - (id) initWithDirectoryPath:(NSString *)directoryPath stream:(KFS3Stream *)stream {
     if (self = [super init]) {
+        transferDictionary = [[NSMutableDictionary alloc] init];
         self.stream = stream;
         _directoryPath = [directoryPath copy];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -67,12 +74,14 @@ static NSString * const kKFS3Key = @"kKFS3Key";
         AWSServiceConfiguration *configuration = [[AWSServiceConfiguration alloc] initWithRegion:region
                                                                              credentialsProvider:awsCredentialsProvider];
         
-        [AWSS3TransferManager registerS3TransferManagerWithConfiguration:configuration forKey:kKFS3TransferManagerKey];
+        //[AWSS3TransferManager registerS3TransferManagerWithConfiguration:configuration forKey:kKFS3TransferManagerKey];
         [AWSS3 registerS3WithConfiguration:configuration forKey:kKFS3Key];
         
-        self.transferManager = [AWSS3TransferManager S3TransferManagerForKey:kKFS3TransferManagerKey];
+        //self.transferManager = [AWSS3TransferManager S3TransferManagerForKey:kKFS3TransferManagerKey];
         self.s3 = [AWSS3 S3ForKey:kKFS3Key];
-        
+      
+        [self initializeS3:configuration];
+      
         self.manifestGenerator = [[KFHLSManifestGenerator alloc] initWithTargetDuration:10 playlistType:KFHLSManifestPlaylistTypeVOD];
     }
     return self;
@@ -121,7 +130,34 @@ static NSString * const kKFS3Key = @"kKFS3Key";
     [_files setObject:kUploadStateUploading forKey:fileName];
     NSString *filePath = [_directoryPath stringByAppendingPathComponent:fileName];
     NSString *key = [self awsKeyForStream:self.stream fileName:fileName];
-    
+  
+    NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+    AWSS3TransferUtilityUploadExpression *uploadExpression = [AWSS3TransferUtilityUploadExpression new];
+    uploadExpression.progressBlock = uploadProgressHandler;
+    [[transferUtility uploadFile: fileURL
+                          bucket: self.stream.bucketName
+                             key: key
+                     contentType: @"application/x-mpegURL"
+                      expression: uploadExpression
+                completionHander: uploadCompletionHandler] continueWithBlock:^id(AWSTask *task) {
+      if (task.error) {
+        [self s3RequestFailedForFileName:fileName withError:task.error];
+      }
+      if (task.result) {
+        AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+        NSNumber *taskIdentifier =[NSNumber numberWithUnsignedInteger: uploadTask.taskIdentifier];
+        NSDictionary *parameters = @{@"id": taskIdentifier,
+                                     @"bucket": self.stream.bucketName,
+                                     @"key": key,
+                                     @"contentType": @"application/x-mpegURL",
+                                     @"filePath": filePath,
+                                     @"fileName": fileName};
+        [transferDictionary setObject:parameters forKey: taskIdentifier];
+      }
+      return nil;
+    }];
+  
+    /*
     AWSS3TransferManagerUploadRequest *uploadRequest = [AWSS3TransferManagerUploadRequest new];
     uploadRequest.bucket = self.stream.bucketName;
     uploadRequest.key = key;
@@ -135,7 +171,7 @@ static NSString * const kKFS3Key = @"kKFS3Key";
         }
         return nil;
     }];
-
+     */
 }
 
 - (NSString*) awsKeyForStream:(KFS3Stream*)stream fileName:(NSString*)fileName {
@@ -146,7 +182,7 @@ static NSString * const kKFS3Key = @"kKFS3Key";
     NSData *data = [manifestString dataUsingEncoding:NSUTF8StringEncoding];
     DDLogVerbose(@"New manifest:\n%@", manifestString);
     NSString *key = [self awsKeyForStream:self.stream fileName:manifestName];
-    
+  
     AWSS3PutObjectRequest *uploadRequest = [AWSS3TransferManagerUploadRequest new];
     uploadRequest.bucket = self.stream.bucketName;
     uploadRequest.key = key;
@@ -213,7 +249,32 @@ static NSString * const kKFS3Key = @"kKFS3Key";
     if (![uploadState isEqualToString:kUploadStateFinished]) {
         NSString *filePath = [_directoryPath stringByAppendingPathComponent:fileName];
         NSString *key = [self awsKeyForStream:self.stream fileName:fileName];
-
+        NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+        AWSS3TransferUtilityUploadExpression *uploadExpression = [AWSS3TransferUtilityUploadExpression new];
+        uploadExpression.progressBlock = uploadProgressHandler;
+        [[transferUtility uploadFile: fileURL
+                              bucket: self.stream.bucketName
+                                 key: key
+                         contentType: @"image/jpeg"
+                          expression: uploadExpression
+                    completionHander: uploadCompletionHandler] continueWithBlock:^id(AWSTask *task) {
+          if (task.error) {
+            [self s3RequestFailedForFileName:fileName withError:task.error];
+          }
+          if (task.result) {
+            AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+            NSNumber *taskIdentifier =[NSNumber numberWithUnsignedInteger: uploadTask.taskIdentifier];
+            NSDictionary *parameters = @{@"id": taskIdentifier,
+                                         @"bucket": self.stream.bucketName,
+                                         @"key": key,
+                                         @"contentType": @"image/jpeg",
+                                         @"filePath": filePath,
+                                         @"fileName": fileName};
+            [transferDictionary setObject:parameters forKey: taskIdentifier];
+          }
+          return nil;
+        }];
+        /*
         AWSS3TransferManagerUploadRequest *uploadRequest = [AWSS3TransferManagerUploadRequest new];
         uploadRequest.bucket = self.stream.bucketName;
         uploadRequest.key = key;
@@ -227,6 +288,7 @@ static NSString * const kKFS3Key = @"kKFS3Key";
             }
             return nil;
         }];
+         */
     }
 }
 
@@ -356,6 +418,85 @@ static NSString * const kKFS3Key = @"kKFS3Key";
         DDLogError(@"Failed to upload request, requeuing %@: %@", fileName, error.description);
         [self uploadNextSegment];
     });
+}
+
+-(void)initializeS3AfterWake {
+  [transferUtility
+   enumerateToAssignBlocksForUploadTask:^(AWSS3TransferUtilityUploadTask *uploadTask, __autoreleasing AWSS3TransferUtilityProgressBlock *uploadProgressBlockReference, __autoreleasing AWSS3TransferUtilityUploadCompletionHandlerBlock *completionHandlerReference) {
+     *uploadProgressBlockReference = uploadProgressHandler;
+     *completionHandlerReference = uploadCompletionHandler;
+   }
+   downloadTask:^(AWSS3TransferUtilityDownloadTask *downloadTask, __autoreleasing AWSS3TransferUtilityProgressBlock *downloadProgressBlockReference, __autoreleasing AWSS3TransferUtilityDownloadCompletionHandlerBlock *completionHandlerReference) {
+     *downloadProgressBlockReference = downloadProgressHandler;
+     *completionHandlerReference = downloadCompletionHandler;
+   }];
+}
+
+-(void)initializeS3:(AWSServiceConfiguration *)configuration {
+  [AWSS3TransferUtility registerS3TransferUtilityWithConfiguration:configuration forKey:kKFS3TransferManagerKey];
+  transferUtility = [AWSS3TransferUtility S3TransferUtilityForKey:kKFS3TransferManagerKey];
+  //downloadExpression = [AWSS3TransferUtilityDownloadExpression new];
+  //downloadExpression.progressBlock = downloadProgressHandler;
+  __block CFAbsoluteTime lastDownloadProgressUpdate = CFAbsoluteTimeGetCurrent();
+  __block CFAbsoluteTime lastUploadProgressUpdate = CFAbsoluteTimeGetCurrent();
+  downloadProgressHandler = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if(CFAbsoluteTimeGetCurrent() - lastDownloadProgressUpdate < 0.25) {
+        return;
+      }
+      NSNumber *taskIdentifier = [NSNumber numberWithUnsignedInteger: task.taskIdentifier];
+      NSDictionary *transfer = [transferDictionary objectForKey:taskIdentifier];
+      if(transfer == nil) {
+        return;
+      }
+      lastDownloadProgressUpdate = CFAbsoluteTimeGetCurrent();
+    });
+  };
+  
+  downloadCompletionHandler = ^(AWSS3TransferUtilityDownloadTask *task, NSURL *location, NSData *data, NSError *error) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      NSNumber *taskIdentifier =[NSNumber numberWithUnsignedInteger: task.taskIdentifier];
+      NSDictionary *transfer = [transferDictionary objectForKey: taskIdentifier];
+      if(transfer == nil) {
+        return;
+      }
+      if (error) {
+      } else {
+       
+      }
+    });
+  };
+  
+  uploadProgressHandler = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if(CFAbsoluteTimeGetCurrent() - lastUploadProgressUpdate < 0.25) {
+        return;
+      }
+      NSNumber *taskIdentifier = [NSNumber numberWithUnsignedInteger: task.taskIdentifier];
+      NSDictionary *transfer = [transferDictionary objectForKey:taskIdentifier];
+      if(transfer == nil) {
+        return;
+      }
+      lastUploadProgressUpdate = CFAbsoluteTimeGetCurrent();
+    });
+  };
+  uploadCompletionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      NSNumber *taskIdentifier =[NSNumber numberWithUnsignedInteger: task.taskIdentifier];
+      NSDictionary *transfer = [transferDictionary objectForKey: taskIdentifier];
+      if(transfer == nil) {
+        return;
+      }
+      NSLog(@"TRANSFER: %@", transfer);
+      if (error) {
+        [self s3RequestFailedForFileName: [transfer objectForKey:@"fileName"] withError:error];
+      } else {;
+        [self s3RequestCompletedForFileName: [transfer objectForKey:@"fileName"]];
+      }
+      [transferDictionary removeObjectForKey:taskIdentifier];
+    });
+  };
+  [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(initializeS3AfterWake) name:UIApplicationDidBecomeActiveNotification object:nil];
 }
 
 @end
