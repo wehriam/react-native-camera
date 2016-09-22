@@ -11,6 +11,7 @@
 #import "KFUser.h"
 #import "KFLog.h"
 #import "KFAWSCredentialsProvider.h"
+#import "WaveformGenerator.h"
 #import <AWSS3/AWSS3.h>
 
 static NSString * const kManifestKey =  @"manifest";
@@ -48,11 +49,12 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 @property (nonatomic) BOOL hasUploadedFinalManifest;
 @end
 
+static dispatch_once_t onceToken;
+
 @implementation KFHLSUploader
 
 - (id) initWithDirectoryPath:(NSString *)directoryPath stream:(KFS3Stream *)stream {
     if (self = [super init]) {
-        transferDictionary = [[NSMutableDictionary alloc] init];
         self.stream = stream;
         _directoryPath = [directoryPath copy];
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -62,6 +64,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         _files = [NSMutableDictionary dictionary];
         _scanningQueue = dispatch_queue_create("KFHLSUploader Scanning Queue", DISPATCH_QUEUE_SERIAL);
         _callbackQueue = dispatch_queue_create("KFHLSUploader Callback Queue", DISPATCH_QUEUE_SERIAL);
+        _waveformQueue = dispatch_queue_create("KFHLSUploader Waveform Queue", DISPATCH_QUEUE_SERIAL);
         _queuedSegments = [NSMutableDictionary dictionaryWithCapacity:5];
         _numbersOffset = 0;
         _nextSegmentIndexToUpload = 0;
@@ -79,6 +82,13 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         //self.transferManager = [AWSS3TransferManager S3TransferManagerForKey:kKFS3TransferManagerKey];
         self.s3 = [AWSS3 S3ForKey:kKFS3Key];
       
+      
+        dispatch_once(&onceToken, ^{
+          transferDictionary = [[NSMutableDictionary alloc] init];
+          [AWSS3TransferUtility registerS3TransferUtilityWithConfiguration:configuration forKey:kKFS3TransferManagerKey];
+          transferUtility = [AWSS3TransferUtility S3TransferUtilityForKey:kKFS3TransferManagerKey];
+        });
+      
         [self initializeS3:configuration];
       
         self.manifestGenerator = [[KFHLSManifestGenerator alloc] initWithTargetDuration:10 playlistType:KFHLSManifestPlaylistTypeVOD];
@@ -90,10 +100,11 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
     self.isFinishedRecording = YES;
     if (!self.hasUploadedFinalManifest) {
         NSString *manifestSnapshot = [self manifestSnapshot];
-        DDLogInfo(@"final manifest snapshot: %@", manifestSnapshot);
+        NSLog(@"final manifest snapshot: %@", manifestSnapshot);
         [self.manifestGenerator appendFromLiveManifest:manifestSnapshot];
         [self.manifestGenerator finalizeManifest];
         NSString *manifestString = [self.manifestGenerator manifestString];
+        NSLog(@"final manifest string: %@", manifestString);
         NSString *vodManifestPath = [_directoryPath stringByAppendingPathComponent:_kVODManifestFileName];
         [manifestString writeToFile:vodManifestPath atomically:NO encoding:NSUTF8StringEncoding error:nil];
         [self updateManifestWithString:manifestString manifestName:_kVODManifestFileName];
@@ -113,7 +124,6 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         }
     }
 
-    
     NSDictionary *segmentInfo = [_queuedSegments objectForKey:@(_nextSegmentIndexToUpload)];
     
     // Skip uploading files that are currently being written
@@ -121,7 +131,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         DDLogInfo(@"Skipping upload of ts file currently being recorded: %@ %@", segmentInfo, contents);
         return;
     }
-    
+  
     NSString *fileName = [segmentInfo objectForKey:kFileNameKey];
     NSString *fileUploadState = [_files objectForKey:fileName];
     if (![fileUploadState isEqualToString:kUploadStateQueued]) {
@@ -131,6 +141,26 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
     [_files setObject:kUploadStateUploading forKey:fileName];
     NSString *filePath = [_directoryPath stringByAppendingPathComponent:fileName];
     NSString *key = [self awsKeyForStream:self.stream fileName:fileName];
+  
+//    dispatch_async(_waveformQueue, ^{
+      NSString *waveformJSON = [WaveformGenerator generate:filePath];
+      NSLog(@"Waveform %@", waveformJSON);
+      NSData *data = [waveformJSON dataUsingEncoding:NSUTF8StringEncoding];
+      NSString *waveformKey = [self awsKeyForStream:self.stream fileName:[NSString stringWithFormat:@"%@.wf.json", fileName]];
+      AWSS3PutObjectRequest *uploadRequest = [AWSS3TransferManagerUploadRequest new];
+      uploadRequest.bucket = self.stream.bucketName;
+      uploadRequest.key = waveformKey;
+      uploadRequest.body = data;
+      uploadRequest.contentLength = @(data.length);
+      [[self.s3 putObject:uploadRequest] continueWithBlock:^id(AWSTask *task) {
+        if (task.error) {
+          //[self s3RequestFailedForFileName:fileName withError:task.error];
+        } else {
+          //[self s3RequestCompletedForFileName:fileName];
+        }
+        return nil;
+      }];
+//    });
   
     NSURL *fileURL = [NSURL fileURLWithPath:filePath];
     AWSS3TransferUtilityUploadExpression *uploadExpression = [AWSS3TransferUtilityUploadExpression new];
@@ -150,7 +180,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         NSDictionary *parameters = @{@"id": taskIdentifier,
                                      @"bucket": self.stream.bucketName,
                                      @"key": key,
-                                     @"contentType": @"application/x-mpegURL",
+                                     @"contentType": @"video/MP2T",
                                      @"filePath": filePath,
                                      @"fileName": fileName};
         [transferDictionary setObject:parameters forKey: taskIdentifier];
@@ -181,7 +211,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 
 - (void) updateManifestWithString:(NSString*)manifestString manifestName:(NSString*)manifestName {
     NSData *data = [manifestString dataUsingEncoding:NSUTF8StringEncoding];
-    DDLogVerbose(@"New manifest:\n%@", manifestString);
+    NSLog(@"New manifest:\n%@", manifestString);
     NSString *key = [self awsKeyForStream:self.stream fileName:manifestName];
   
     AWSS3PutObjectRequest *uploadRequest = [AWSS3TransferManagerUploadRequest new];
@@ -205,9 +235,9 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
     dispatch_async(_scanningQueue, ^{
         NSError *error = nil;
         NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:_directoryPath error:&error];
-        DDLogVerbose(@"Directory changed, fileCount: %lu", (unsigned long)files.count);
+        NSLog(@"Directory changed, fileCount: %lu", (unsigned long)files.count);
         if (error) {
-            DDLogError(@"Error listing directory contents");
+            NSLog(@"Error listing directory contents");
         }
         if (!_manifestPath) {
             [self initializeManifestPathFromFiles:files];
@@ -218,7 +248,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 
 - (void) detectNewSegmentsFromFiles:(NSArray*)files {
     if (!_manifestPath) {
-        DDLogVerbose(@"Manifest path not yet available");
+        NSLog(@"Manifest path not yet available");
         return;
     }
     [files enumerateObjectsUsingBlock:^(NSString *fileName, NSUInteger idx, BOOL *stop) {
@@ -227,9 +257,11 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
         NSString *fileExtension = [components lastObject];
         if ([fileExtension isEqualToString:@"ts"]) {
             NSString *uploadState = [_files objectForKey:fileName];
+            NSString *manifestSnapshot = [self manifestSnapshot];
+            [self.manifestGenerator appendFromLiveManifest:manifestSnapshot];
             if (!uploadState) {
-                NSString *manifestSnapshot = [self manifestSnapshot];
-                [self.manifestGenerator appendFromLiveManifest:manifestSnapshot];
+                //NSString *manifestSnapshot = [self manifestSnapshot];
+                //[self.manifestGenerator appendFromLiveManifest:manifestSnapshot];
                 NSUInteger segmentIndex = [self indexForFilePrefix:filePrefix];
                 NSDictionary *segmentInfo = @{kManifestKey: manifestSnapshot,
                                               kFileNameKey: fileName,
@@ -360,6 +392,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
             NSDictionary *segmentInfo = [_queuedSegments objectForKey:@(_nextSegmentIndexToUpload)];
             NSString *filePath = [_directoryPath stringByAppendingPathComponent:fileName];
 
+          
             NSString *manifest = [segmentInfo objectForKey:kManifestKey];
             NSDate *uploadStartDate = [segmentInfo objectForKey:kFileStartDateKey];
 
@@ -420,7 +453,7 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 {
     dispatch_async(_scanningQueue, ^{
         [_files setObject:kUploadStateFailed forKey:fileName];
-        DDLogError(@"Failed to upload request, requeuing %@: %@", fileName, error.description);
+        NSLog(@"Failed to upload request, requeuing %@: %@", fileName, error.description);
         [self uploadNextSegment];
     });
 }
@@ -438,10 +471,8 @@ AWSS3TransferUtilityProgressBlock uploadProgressHandler;
 }
 
 -(void)initializeS3:(AWSServiceConfiguration *)configuration {
-  [AWSS3TransferUtility registerS3TransferUtilityWithConfiguration:configuration forKey:kKFS3TransferManagerKey];
-  transferUtility = [AWSS3TransferUtility S3TransferUtilityForKey:kKFS3TransferManagerKey];
-  //downloadExpression = [AWSS3TransferUtilityDownloadExpression new];
-  //downloadExpression.progressBlock = downloadProgressHandler;
+
+
   __block CFAbsoluteTime lastDownloadProgressUpdate = CFAbsoluteTimeGetCurrent();
   __block CFAbsoluteTime lastUploadProgressUpdate = CFAbsoluteTimeGetCurrent();
   downloadProgressHandler = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {

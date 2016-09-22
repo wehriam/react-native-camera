@@ -17,6 +17,7 @@
 
 static KFHLSMonitor *_sharedMonitor = nil;
 
+
 @implementation KFHLSMonitor
 
 + (KFHLSMonitor*) sharedMonitor {
@@ -36,6 +37,7 @@ static KFHLSMonitor *_sharedMonitor = nil;
 }
 
 - (void) startMonitoringFolderPath:(NSString *)path endpoint:(KFS3Stream *)endpoint delegate:(id<KFHLSUploaderDelegate>)delegate {
+  NSLog(@"Monitoring Path %@", path);
     dispatch_async(self.monitorQueue, ^{
         KFHLSUploader *hlsUploader = [[KFHLSUploader alloc] initWithDirectoryPath:path stream:endpoint];
         hlsUploader.delegate = delegate;
@@ -44,7 +46,7 @@ static KFHLSMonitor *_sharedMonitor = nil;
 }
 
 - (void) finishUploadingContentsAtFolderPath:(NSString*)path endpoint:(KFS3Stream*)endpoint {
-    //dispatch_async(self.monitorQueue, ^{
+    dispatch_async(self.monitorQueue, ^{
         KFHLSUploader *hlsUploader = [self.hlsUploaders objectForKey:path];
         if (!hlsUploader) {
             hlsUploader = [[KFHLSUploader alloc] initWithDirectoryPath:path stream:endpoint];
@@ -52,15 +54,15 @@ static KFHLSMonitor *_sharedMonitor = nil;
         }
         hlsUploader.delegate = self;
         [hlsUploader finishedRecording];
-    //});
+    });
 }
 
 - (void) uploader:(KFHLSUploader *)uploader didUploadSegmentAtURL:(NSURL *)segmentURL uploadSpeed:(double)uploadSpeed numberOfQueuedSegments:(NSUInteger)numberOfQueuedSegments {
-    DDLogInfo(@"[Background monitor] Uploaded segment %@ @ %f KB/s, numberOfQueuedSegments %d", segmentURL, uploadSpeed, numberOfQueuedSegments);
+    NSLog(@"[Background monitor] Uploaded segment %@ @ %f KB/s, numberOfQueuedSegments %d", segmentURL, uploadSpeed, numberOfQueuedSegments);
 }
 
 - (void) uploaderHasFinished:(KFHLSUploader*)uploader {
-    DDLogInfo(@"Uploader finished, switched to VOD manifest");
+    NSLog(@"Uploader finished, switched to VOD manifest");
     dispatch_async(self.monitorQueue, ^{
         [self.hlsUploaders removeObjectForKey:uploader.directoryPath];
     });

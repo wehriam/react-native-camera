@@ -27,6 +27,7 @@
 @property (readonly, nonatomic, strong) NSString *directoryPath;
 @property (nonatomic) dispatch_queue_t scanningQueue;
 @property (nonatomic) dispatch_queue_t callbackQueue;
+@property (nonatomic) dispatch_queue_t waveformQueue;
 @property (nonatomic, strong) KFS3Stream *stream;
 @property (nonatomic, strong) NSString *kVODManifestFileName;
 @property (nonatomic) BOOL useSSL;

@@ -64,12 +64,16 @@
 }
 
 - (NSString*) stripToNumbers:(NSString*)string {
-    return [[string componentsSeparatedByCharactersInSet:
-             [[NSCharacterSet decimalDigitCharacterSet] invertedSet]]
-            componentsJoinedByString:@""];
+    NSMutableCharacterSet *characterSet = [NSMutableCharacterSet characterSetWithCharactersInString:@"0123456789."];
+    return [[string componentsSeparatedByCharactersInSet:[characterSet invertedSet]] componentsJoinedByString:@""];
 }
 
 - (void) appendFromLiveManifest:(NSString *)liveManifest {
+  
+    NSNumberFormatter *numberFormatter = [[NSNumberFormatter alloc] init];
+    numberFormatter.numberStyle = NSNumberFormatterScientificStyle;
+  
+  
     NSArray *rawLines = [liveManifest componentsSeparatedByString:@"\n"];
     NSMutableArray *lines = [NSMutableArray arrayWithCapacity:rawLines.count];
     for (NSString *line in rawLines) {
@@ -88,8 +92,10 @@
     NSString *extInfNumberString = [self stripToNumbers:extInf];
     NSString *segmentName = lines[lines.count-1];
     NSString *segmentNumberString = [self stripToNumbers:segmentName];
-    float duration = [extInfNumberString floatValue];
-    NSInteger sequence = [segmentNumberString integerValue];
+  
+    float duration = [numberFormatter numberFromString:extInfNumberString].floatValue;
+    NSInteger sequence = [numberFormatter numberFromString:segmentNumberString].integerValue;
+  
     if (sequence > self.mediaSequence) {
         [self appendFileName:segmentName duration:duration mediaSequence:sequence];
     }

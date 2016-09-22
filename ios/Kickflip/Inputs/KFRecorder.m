@@ -52,12 +52,12 @@
 }
 
 
-- (void) setupHLSWriterWithEndpoint:(KFS3Stream*)endpoint {
-    
+- (void) setupHLSWriterWithEndpoint:(KFS3Stream*)endpoint {    
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
     NSString *basePath = ([paths count] > 0) ? [paths objectAtIndex:0] : nil;
     NSString *folderName = endpoint.streamID;
-    NSString *hlsDirectoryPath = [basePath stringByAppendingPathComponent:folderName];
+    NSString *hlsDirectoryPath = [[basePath stringByAppendingPathComponent:@"c"] stringByAppendingPathComponent:folderName];
+    //[basePath stringByAppendingPathComponent:folderName];
     self.manifestPath = hlsDirectoryPath;
     [[NSFileManager defaultManager] createDirectoryAtPath:hlsDirectoryPath withIntermediateDirectories:YES attributes:nil error:nil];
     self.hlsWriter = [[KFHLSWriter alloc] initWithDirectoryPath:hlsDirectoryPath];
@@ -253,8 +253,6 @@
     }
     DDLogVerbose(@"Manifest ready at URL: %@", manifestURL);
 }
-
-
 
 
 @end

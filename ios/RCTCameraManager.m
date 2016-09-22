@@ -12,6 +12,7 @@
 #import "RCTSensorOrientationChecker.h"
 #import "KFRecorder.h"
 #import "KFStream.h"
+#import "KFHLSWriter.h"
 
 @interface RCTCameraManager ()
 
@@ -456,14 +457,30 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
   if(error != nil) {
     self.videoReject(RCTErrorUnspecified, nil, RCTErrorWithMessage(@"KFRecorder Error"));
   }
+  
+  NSArray *filePathsArray = [[NSFileManager defaultManager] subpathsOfDirectoryAtPath:recorder.hlsWriter.directoryPath  error:nil];
+  NSPredicate *predicate = [NSPredicate predicateWithFormat:@"SELF EndsWith '.wf.json'"];
+  filePathsArray =  [filePathsArray filteredArrayUsingPredicate:predicate];
+  NSLog(@"files array %@", filePathsArray);
+  NSData *data;
+  NSArray *jsonArray;
+  NSArray *amplitudeSamples = @[];
+  for (id filePath in filePathsArray) {
+    data = [NSData dataWithContentsOfFile:filePath];
+    jsonArray = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:nil];
+    amplitudeSamples = [amplitudeSamples arrayByAddingObjectsFromArray:jsonArray];
+  }
+  
   NSMutableDictionary *videoInfo = [NSMutableDictionary dictionaryWithDictionary:@{
      @"duration": [NSNumber numberWithDouble:[recorder.finishDate timeIntervalSinceDate:recorder.startDate]],
      @"streamId": recorder.stream.streamID,
      @"streamType": @"HLS",
      @"width":[NSNumber numberWithFloat:recorder.videoWidth],
      @"height":[NSNumber numberWithFloat:recorder.videoHeight],
-     @"path": [NSString stringWithFormat:@"%@/vod.m3u8", recorder.manifestPath] 
+     @"path": [NSString stringWithFormat:@"http://localhost:8080/%@/index.m3u8", recorder.stream.streamID],
+     @"amplitudeSamples": amplitudeSamples
   }];
+  RCTLog(@"Video Info: %@", videoInfo);
   self.videoResolve(videoInfo);
 }
 
@@ -763,7 +780,7 @@ RCT_EXPORT_METHOD(hasFlash:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRej
         NSString *streamID = [[NSUUID UUID] UUIDString];
         NSMutableDictionary *awsDictionary = [[NSMutableDictionary alloc] initWithDictionary:[options valueForKey:@"awsSettings"] copyItems:NO];
         [awsDictionary setObject:streamID forKey:@"stream_id"];
-        [awsDictionary setObject:[[NSString alloc] initWithFormat:@"%@/%@", [awsDictionary objectForKey:@"aws_prefix"], streamID] forKey:@"aws_prefix"];
+        [awsDictionary setObject:[[NSString alloc] initWithFormat:@"%@%@/",[awsDictionary objectForKey:@"aws_prefix"], streamID] forKey:@"aws_prefix"];
         [self.recorder startRecording:orientation awsDictionary:awsDictionary];
     } else {
         [[self.movieFileOutput connectionWithMediaType:AVMediaTypeVideo] setVideoOrientation:orientation];
