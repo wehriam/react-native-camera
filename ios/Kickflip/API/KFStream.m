@@ -64,17 +64,17 @@ static NSString * const KFStreamStateKey = @"KFStreamStateKey";
 }
 
 + (NSValueTransformer *)startDateJSONTransformer {
-    return [MTLValueTransformer reversibleTransformerWithForwardBlock:^(NSString *str) {
+    return [MTLValueTransformer transformerUsingForwardBlock:^(NSString *str, BOOL *success, NSError **error) {
         return [[KFDateUtils utcDateFormatter] dateFromString:str];
-    } reverseBlock:^(NSDate *date) {
+    } reverseBlock:^(NSDate *date, BOOL *success, NSError **error) {
         return [[KFDateUtils utcDateFormatter] stringFromDate:date];
     }];
 }
 
 + (NSValueTransformer *)finishDateJSONTransformer {
-    return [MTLValueTransformer reversibleTransformerWithForwardBlock:^(NSString *str) {
+    return [MTLValueTransformer transformerUsingForwardBlock:^(NSString *str, BOOL *success, NSError **error) {
         return [[KFDateUtils utcDateFormatter] dateFromString:str];
-    } reverseBlock:^(NSDate *date) {
+    } reverseBlock:^(NSDate *date, BOOL *success, NSError **error) {
         return [[KFDateUtils utcDateFormatter] stringFromDate:date];
     }];
 }

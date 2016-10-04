@@ -8,7 +8,7 @@
 
 #import "KFHLSUploader.h"
 #import "KFS3Stream.h"
-#import "KFUser.h"
+//#import "KFUser.h"
 #import "KFLog.h"
 #import "KFAWSCredentialsProvider.h"
 #import "WaveformGenerator.h"

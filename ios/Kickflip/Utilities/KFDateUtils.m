@@ -48,7 +48,7 @@
     if (!startDate || !endDate) {
         return nil;
     }
-    NSCalendarUnit calendarUnits = NSHourCalendarUnit | NSMinuteCalendarUnit | NSSecondCalendarUnit;
+    NSCalendarUnit calendarUnits = NSCalendarUnitHour | NSCalendarUnitMinute | NSCalendarUnitSecond;
     NSCalendar *currentCalendar = [NSCalendar currentCalendar];
     NSDateComponents *dateComponents = [currentCalendar components:calendarUnits fromDate:startDate toDate:endDate options:0];
     
